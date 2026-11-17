@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capped Escalation Gateway</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column, like a design doc. Two semantic colors carry the whole page:
+   teal = the cheap path, amber = the expensive (paid) path. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #18212b; --muted: #5a6675; --line: #d5dae1;
+  --cheap: #0f7a6c; --cheap-soft: #dff1ee; --exp: #a85d00; --exp-soft: #fbecd3;
+  --ctrl: #3b4f9c; --ctrl-soft: #e4e8f7;
+  --display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161c; --surface: #1a2029; --fg: #e6eaf0; --muted: #9aa6b5; --line: #323b48;
+  --cheap: #4fc4b3; --cheap-soft: #15332f; --exp: #f0b25a; --exp-soft: #3a2a10;
+  --ctrl: #9aaaf0; --ctrl-soft: #222a4a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161c; --surface: #1a2029; --fg: #e6eaf0; --muted: #9aa6b5; --line: #323b48;
+  --cheap: #4fc4b3; --cheap-soft: #15332f; --exp: #f0b25a; --exp-soft: #3a2a10;
+  --ctrl: #9aaaf0; --ctrl-soft: #222a4a; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.6; }
+.page { max-width: 46rem; margin: 0 auto; padding-block: 2.5rem 4rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 2.75rem; }
+section { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.4rem; font-weight: 600; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.02rem; font-weight: 600; }
+p, ul, ol { margin: 0; }
+.lede { font-size: 1.12rem; color: var(--fg); }
+.meta { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); letter-spacing: 0.02em; }
+.muted { color: var(--muted); }
+.cheap { color: var(--cheap); font-weight: 600; } .exp { color: var(--exp); font-weight: 600; }
+
+nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.9rem; }
+nav a { color: var(--ctrl); text-decoration: none; border-bottom: 1px solid transparent; }
+nav a:hover, nav a:focus-visible { border-bottom-color: var(--ctrl); outline: none; }
+
+.problems { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem 1.5rem; }
+.problems div { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.problems p { font-size: 0.94rem; color: var(--muted); }
+
+.question { background: var(--ctrl-soft); border-radius: 6px; padding: 1rem 1.15rem; font-size: 1.02rem; }
+
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.6rem 0.75rem 0.6rem 0; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+table.wide { min-width: 40rem; }
+
+.chip { display: inline-block; font-family: var(--mono); font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px; white-space: nowrap; }
+.chip.built { background: var(--cheap-soft); color: var(--cheap); }
+.chip.sprint { background: var(--ctrl-soft); color: var(--ctrl); }
+.chip.report { background: var(--exp-soft); color: var(--exp); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.85rem; color: var(--muted); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.75rem; }
+figure svg { display: block; width: 100%; min-width: 38rem; height: auto; }
+figcaption { font-size: 0.85rem; color: var(--muted); padding-top: 0.5rem; }
+svg text { font-family: var(--body); fill: var(--fg); font-size: 13px; }
+svg .sub { fill: var(--muted); font-size: 11.5px; }
+svg .lbl { font-family: var(--mono); fill: var(--muted); font-size: 10.5px; }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+svg .gw { fill: var(--ctrl-soft); stroke: var(--ctrl); }
+svg .bx-cheap { fill: var(--cheap-soft); stroke: var(--cheap); }
+svg .bx-exp { fill: var(--exp-soft); stroke: var(--exp); }
+svg .wire { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+svg .wire.c { stroke: var(--cheap); } svg .wire.e { stroke: var(--exp); } svg .wire.k { stroke: var(--ctrl); stroke-dasharray: 5 4; }
+svg .head { fill: var(--muted); } svg .head.c { fill: var(--cheap); } svg .head.e { fill: var(--exp); } svg .head.k { fill: var(--ctrl); }
+
+ol.steps { list-style: none; padding: 0; counter-reset: s; display: flex; flex-direction: column; gap: 1rem; }
+ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2rem 1fr; gap: 0 0.75rem; }
+ol.steps > li::before { content: counter(s); font-family: var(--mono); font-size: 0.85rem; color: var(--ctrl); padding-top: 0.15rem; }
+ol.steps > li > div { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+ol.steps p { font-size: 0.96rem; }
+.rule { font-family: var(--mono); font-size: 0.88rem; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0.7rem 0.9rem; overflow-x: auto; white-space: nowrap; }
+ul.plain { padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.45rem; }
+ul.plain li { font-size: 0.96rem; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.25rem 2rem; }
+.two > div { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+</style>
+
+<div class="page">
+
+<header style="display:flex;flex-direction:column;gap:0.9rem">
+  <p class="meta">CPS 512 · DISTRIBUTED SYSTEMS · TEAM PROJECT · PLAN AS OF NOV 17 2026</p>
+  <h1>Capped Escalation Gateway</h1>
+  <p class="lede">A company runs a small, cheap model for most questions and pays a large model for the hard ones, under a fixed spending cap. This project builds the layer in front of both that decides, request by request, which answer to return, and never spends past the cap, even when parts of it crash.</p>
+  <nav aria-label="Sections">
+    <a href="#problems">Problems</a><a href="#components">Components</a><a href="#flow">One request</a>
+    <a href="#budget">Sharing the budget</a><a href="#claims">What we test</a><a href="#faults">Fault tolerance</a><a href="#next">Extensions</a>
+  </nav>
+</header>
+
+<section id="problems">
+  <h2>The problems</h2>
+  <p>Each of these is documented in production systems today. The sources are in the checkpoint's reference list.</p>
+  <div class="problems">
+    <div><h3>Shared caps get overspent</h3><p>Gateways run as several copies. Each copy counts spending after the bill arrives, so requests in flight at the same moment push the total past the cap.</p></div>
+    <div><h3>Confidence scores can be wrong</h3><p>A score says how likely the cheap answer is right. It can be biased, stuck at one value, or pushed around by crafted inputs. We receive it from another system and cannot fully trust it.</p></div>
+    <div><h3>The cheap model degrades silently</h3><p>A wrong prompt template or a wrong model version makes answers worse without any error. Nothing crashes, so nothing alerts.</p></div>
+    <div><h3>Escalating costs time too</h3><p>An escalated request waits for the cheap model, then the score, then the expensive model. A burst of escalations also queues up at the expensive provider.</p></div>
+  </div>
+  <p class="question"><strong>The distributed systems question.</strong> Several gateway copies each decide on their own, with no shared counter in the request path. How do they together respect one spending cap, one error budget and one latency target, through crashes, network cut-offs, and copies being added or removed?</p>
+</section>
+
+<section id="components">
+  <h2>The components</h2>
+  <div class="scroll"><figure>
+    <svg viewBox="0 0 760 430" role="img" aria-label="Clients send requests to gateway replicas. Every request goes to the cheap tier. Some go to the expensive tier. Replicas get budget leases from the allocator and send audit results to the monitor.">
+      <defs>
+        <marker id="a" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path class="head" d="M0,0 L9,4 L0,8 Z"/></marker>
+        <marker id="ac" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path class="head c" d="M0,0 L9,4 L0,8 Z"/></marker>
+        <marker id="ae" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path class="head e" d="M0,0 L9,4 L0,8 Z"/></marker>
+        <marker id="ak" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path class="head k" d="M0,0 L9,4 L0,8 Z"/></marker>
+      </defs>
+      <rect class="box" x="16" y="128" width="112" height="56" rx="5"/>
+      <text x="72" y="152" text-anchor="middle">Client</text><text class="sub" x="72" y="169" text-anchor="middle">sends a question</text>
+
+      <rect class="box gw" x="196" y="28" width="212" height="256" rx="6"/>
+      <text x="302" y="52" text-anchor="middle" font-weight="600">Gateway replicas</text>
+      <g>
+        <rect class="box" x="214" y="66" width="176" height="58" rx="4"/><text x="226" y="89">Replica 1</text><text class="lbl" x="226" y="109">lease $ · expiry · epoch · price</text>
+        <rect class="box" x="214" y="134" width="176" height="58" rx="4"/><text x="226" y="157">Replica 2</text><text class="lbl" x="226" y="177">lease $ · expiry · epoch · price</text>
+        <rect class="box" x="214" y="202" width="176" height="58" rx="4"/><text x="226" y="225">Replica N</text><text class="lbl" x="226" y="245">lease $ · expiry · epoch · price</text>
+      </g>
+
+      <rect class="box bx-cheap" x="494" y="34" width="250" height="68" rx="5"/>
+      <text x="508" y="60" font-weight="600">Cheap tier</text><text class="sub" x="508" y="80">small model, about 8B. Answers every request.</text>
+      <rect class="box bx-exp" x="494" y="130" width="250" height="68" rx="5"/>
+      <text x="508" y="156" font-weight="600">Expensive tier</text><text class="sub" x="508" y="176">paid API with a spending cap</text>
+      <rect class="box" x="494" y="250" width="250" height="68" rx="5"/>
+      <text x="508" y="276" font-weight="600">Monitor</text><text class="sub" x="508" y="296">audit results, threshold, drift alarm</text>
+      <rect class="box" x="196" y="346" width="212" height="68" rx="5"/>
+      <text x="210" y="372" font-weight="600">Allocator</text><text class="sub" x="210" y="392">primary + backup. Owns the cap.</text>
+
+      <path class="wire" d="M128,156 H194" marker-end="url(#a)"/>
+      <path class="wire c" d="M408,82 H492" marker-end="url(#ac)"/><text class="lbl" x="414" y="74">every request</text>
+      <path class="wire e" d="M408,164 H492" marker-end="url(#ae)"/><text class="lbl" x="414" y="156">escalations</text><text class="lbl" x="414" y="180">+ audits</text>
+      <path class="wire k" d="M408,240 C450,240 450,284 492,284" marker-end="url(#ak)"/><text class="lbl" x="414" y="268">audit results</text>
+      <path class="wire k" d="M302,286 V344" marker-end="url(#ak)"/><text class="lbl" x="312" y="320">grant · renew · return</text>
+    </svg>
+    <figcaption>Solid lines carry requests. Dashed lines are bookkeeping that stays out of the request path.</figcaption>
+  </figure></div>
+
+  <div class="scroll"><table class="wide">
+    <thead><tr><th>Component</th><th>Job</th><th>What it remembers</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Gateway replica</td><td>Decides keep or escalate for each request, alone and fast.</td><td>Its lease, its prices, its audit rate</td><td><span class="chip built">core built</span></td></tr>
+      <tr><td>Allocator</td><td>Owns the cap. Hands it out in small timed slices called leases.</td><td>Budget left, open leases, its epoch number</td><td><span class="chip built">core built</span></td></tr>
+      <tr><td>Cheap tier</td><td>Answers every request. In experiments it replays recorded answers.</td><td>Nothing</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Expensive tier</td><td>Answers escalations and audits. Replays recorded answers, with a model of its queue.</td><td>Its queue, request IDs it has seen</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Monitor</td><td>Collects audit results. Sets the confidence threshold. Raises the drift alarm.</td><td>Audit results, current threshold</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Scorer</td><td>Gives each cheap answer a confidence score from 0 to 1.</td><td>Not ours. Comes from the separate scoring project as one data file.</td><td><span class="chip sprint">file pending</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="font-size:0.92rem">The final system runs these as Ray Serve components. The logic lives in plain Python classes, so the same code also runs under a simulated clock for fast experiments. No GPUs are needed: both model tiers are replayed from answers recorded once, ahead of time.</p>
+</section>
+
+<section id="flow">
+  <h2>One request, end to end</h2>
+  <ol class="steps">
+    <li><div><h3>The request reaches a replica</h3><p>Ray Serve picks one of the gateway replicas. No replica talks to another.</p></div></li>
+    <li><div><h3>The cheap tier answers</h3><p>Every request gets a <span class="cheap">cheap answer</span> first. The scorer attaches a confidence score <em>s</em>: its guess at the chance this answer is right.</p></div></li>
+    <li><div><h3>The replica estimates what escalating would cost</h3><p>Two numbers. A <strong>cost bound</strong>: the most the expensive answer could cost, from a length predictor tuned so real cost rarely exceeds it. And an <strong>extra delay</strong>, from how busy the expensive tier is right now.</p></div></li>
+    <li><div><h3>Keep or escalate</h3>
+      <div class="rule">escalate if&nbsp; (1 − s) &gt; money price × cost bound + latency price × extra delay<br>and the lease still holds at least the cost bound</div>
+      <p>The left side is the expected gain: the chance the cheap answer is wrong. The right side is what escalating costs, in the replica's own prices. If the replica has no valid lease, it returns the cheap answer with a flag. It never spends money it does not hold.</p></div></li>
+    <li><div><h3>If escalating: reserve, call, settle</h3><p>The replica sets the cost bound aside from its lease, then calls the <span class="exp">expensive tier</span> with a token limit so the bill cannot exceed the bound. It returns that answer, charges the real cost, and frees the rest.</p></div></li>
+    <li><div><h3>Sometimes: audit in the background</h3><p>For a small share of cheap answers, the replica also asks the expensive tier after replying. It compares the two answers and sends the result to the monitor. The client is not kept waiting. Audits are paid from the same lease.</p></div></li>
+    <li><div><h3>Adjust the prices</h3><p>The money price rises when the lease is being spent faster than its remaining time allows, and falls when slower. The latency price rises when slow responses exceed the target. This is how a replica becomes pickier when money or time is tight.</p></div></li>
+  </ol>
+</section>
+
+<section id="budget">
+  <h2>Sharing one budget without a shared counter</h2>
+  <div class="two">
+    <div><h3>Leases</h3><p>The allocator gives each replica a slice of the cap that is valid for a short time, about 30 seconds. A replica spends only from its own slice, with no network call per request. Before the slice expires it asks for a new one and hands back what it did not use.</p></div>
+    <div><h3>Why the cap cannot be exceeded</h3><p>Budget counts as gone the moment it is granted. It comes back only when the replica holding it reports what it really spent. A replica that crashes never reports, so its slice is lost, never handed out twice. Total spent is always at most total granted, which is at most the cap.</p></div>
+    <div><h3>Epochs</h3><p>Every allocator has a number that goes up each time a new one takes over. Leases carry that number. Replicas refuse anything from an older allocator, so a stale one cannot hand out budget the new one already counted.</p></div>
+    <div><h3>The price paid</h3><p>Safety costs some unused budget: slices stranded by crashes, and the gap between each cost bound and the real cost. Measuring that waste against lease length is one of the results.</p></div>
+  </div>
+</section>
+
+<section id="claims">
+  <h2>What we test</h2>
+  <div class="scroll"><table class="wide">
+    <thead><tr><th>Claim</th><th>In plain words</th><th>Compared against</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>H1 Exact cap</td><td>Leases keep spend at or below the cap with zero overshoot under crashes and cut-offs, while using nearly all the budget.</td><td>A central counter, as in today's gateways</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>H2 Cost bound</td><td>Pricing an escalation by a tuned upper bound serves more requests than reserving the maximum, and unlike a best guess it never overshoots.</td><td>Reserve-the-maximum; best guess</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>H3 Audits</td><td>A small audit budget keeps errors among cheap answers within a stated limit and detects when the score or cheap model goes bad.</td><td>No audits, fixed threshold</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>H4 Local vs global</td><td>Each replica pricing on its own slice loses little accuracy against one global price. Moving budget toward busy replicas closes the gap.</td><td>One global price</td><td><span class="chip report">report</span></td></tr>
+      <tr><td>H5 Latency</td><td>A latency price keeps slow responses under target during bursts, for a small loss in accuracy.</td><td>No latency price</td><td><span class="chip report">report</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="legend">
+    <span><span class="chip built">core built</span> runs today on stand-in data</span>
+    <span><span class="chip sprint">by Nov 18</span> planned for the presentation</span>
+    <span><span class="chip report">report</span> planned for the Nov 24 report</span>
+  </div>
+  <p class="muted" style="font-size:0.92rem">Built so far: the simulated clock, leases, the allocator, the keep-or-escalate rule with a money price, and a run of 10,000 requests through 4 replicas with zero overshoot. That run used made-up stand-in rows. No result on real data exists yet.</p>
+</section>
+
+<section id="faults">
+  <h2>Fault tolerance</h2>
+  <p>Each fault is injected on purpose during a run. The table gives what the system does and what we measure.</p>
+  <div class="scroll"><table class="wide">
+    <thead><tr><th>Fault</th><th>How the system handles it</th><th>What we measure</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>Replica crashes</td><td>Its slice sits unused until it expires, so the cap holds. Ray restarts the replica, which asks for a new lease. A half-done escalation counts as spent. Retried requests carry an ID and the expensive tier drops repeats.</td><td>Overshoot, which must be zero. Stranded budget against lease length.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Replica cut off from the allocator</td><td>It keeps serving from its lease until expiry. Then it returns cheap answers only, flagged.</td><td>Overshoot. Share of flagged requests.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Answer longer than its bound</td><td>The token limit stops it, so the bill stays within the reservation.</td><td>How often answers are cut short.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Old allocator returns</td><td>Replicas reject its grants because the epoch is older. Its own authority also times out.</td><td>Double grants, which must be zero.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Cheap model silently worse</td><td>Audits show more errors at the same score. The drift alarm fires and the threshold moves toward escalating more.</td><td>Audits needed before the alarm. False alarms on clean runs.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Scorer breaks</td><td>Audits show the score no longer separates right from wrong. The gateway falls back to a fixed escalation rate within budget and alerts.</td><td>Detection delay. Error rate after fallback.</td><td><span class="chip sprint">by Nov 18</span></td></tr>
+      <tr><td>Allocator primary crashes</td><td>Replicas keep spending their current leases. The backup misses two heartbeats, takes over with the next epoch, and rebuilds from the grant log on disk. Grants are logged before they are sent.</td><td>Overshoot. Time with no allocator. Grants lost, which must be zero.</td><td><span class="chip report">report</span></td></tr>
+      <tr><td>Replicas added or removed</td><td>A new replica gets a small first lease. A clean shutdown returns unused budget. The allocator shifts budget toward faster spenders.</td><td>Budget use and accuracy against a fixed replica count.</td><td><span class="chip report">report</span></td></tr>
+      <tr><td>Expensive tier overloaded</td><td>The latency price rises so fewer requests escalate. Retries are capped and charged. After repeated errors, escalation pauses for a cool-down.</td><td>Slow-response latency against target. Retry volume.</td><td><span class="chip report">report</span></td></tr>
+      <tr><td>Quota-drain attack</td><td>Crafted inputs push the scorer toward escalating. The lease burns faster than traffic explains, the price rises, and damage stays inside that lease.</td><td>Budget lost before detection.</td><td><span class="chip report">stretch</span></td></tr>
+      <tr><td>Monitor crashes</td><td>Replicas keep the last threshold and buffer audit results until it restarts.</td><td>Alarms missed.</td><td><span class="chip report">stretch</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 style="padding-top:0.5rem">Five rules behind the table, and where the course taught them</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Rule</th><th>Meaning here</th><th>Seen in</th></tr></thead>
+    <tbody>
+      <tr><td>Write it down first</td><td>The allocator logs a grant before sending it.</td><td>Raft, Bigtable, Lab 2</td></tr>
+      <tr><td>Authority expires</td><td>Leases and the allocator's own role time out.</td><td>GFS leases, Chubby locks</td></tr>
+      <tr><td>Epochs reject the past</td><td>Anything stamped with an older number is refused.</td><td>Raft terms, Lab 2 views, Lab 4 configs</td></tr>
+      <tr><td>Fail closed</td><td>When unsure, spend nothing and flag the answer.</td><td>Primary-backup under partition</td></tr>
+      <tr><td>Control can fail, serving goes on</td><td>Replicas keep answering on their leases with no allocator.</td><td>Borg tasks without the Borgmaster</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="next">
+  <h2>Extensions beyond the presentation</h2>
+  <div class="two">
+    <div><h3>For the Nov 24 report</h3>
+      <ul class="plain">
+        <li>Rerun every result on the real 8B model's answers once that data arrives.</li>
+        <li>Allocator backup taking over after a crash, measured.</li>
+        <li>The latency price and the expensive tier's queue model.</li>
+        <li>Local against global pricing, with budget moved between replicas and replicas added or removed.</li>
+        <li>Quota-drain attack and monitor crash.</li>
+        <li>Overhead numbers, and a short live run against a real served model.</li>
+      </ul></div>
+    <div><h3>Future work</h3>
+      <ul class="plain">
+        <li><strong>Self-hosted expensive tier.</strong> If the large model runs on our own GPUs, the cap becomes capacity. Leases would grant a request rate, not dollars.</li>
+        <li><strong>Allocator on Raft.</strong> Three or five allocator copies agreeing on the grant log, in place of one primary and one backup.</li>
+        <li><strong>Hold answers until checked.</strong> For high-stakes requests, do not release a cheap answer until its audit agrees.</li>
+        <li><strong>Per-customer bounds.</strong> A separate cost bound and cap for each customer of the gateway.</li>
+      </ul></div>
+  </div>
+  <p class="muted" style="font-size:0.92rem">Known limits we will state: results come from replayed answers, not live traffic. Audits use up budget, which hurts most under a tight cap. Pacing for a single router is already published, so our claims rest on the distributed parts.</p>
+</section>
+
+</div>

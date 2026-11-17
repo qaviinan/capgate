@@ -1,0 +1,16 @@
+[project]
+name = "capgate"
+version = "0.1.0"
+description = "Capped escalation gateway (CS 512 project)"
+requires-python = ">=3.12,<3.13"
+dependencies = ["numpy", "pandas", "pyarrow"]
+
+[project.optional-dependencies]
+ray = ["ray[serve]"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
